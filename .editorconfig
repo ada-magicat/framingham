@@ -1,0 +1,6 @@
+root = true
+
+# Unix-style newlines with a newline ending every file
+[*]
+indent_size = 2
+indent_style = space
