@@ -12,7 +12,7 @@ wl_mod = import('unstable-wayland')
 xml = wl_mod.find_protocol('xdg-shell')
 xdg_shell = wl_mod.scan_xml(xml)
 
-executable('framingham', 'framingham.c', xdg_shell, dependencies: [
+executable('framingham', 'src/framingham.c', xdg_shell, dependencies: [
   math_dep,
   glib,
   wlcl_dep,
