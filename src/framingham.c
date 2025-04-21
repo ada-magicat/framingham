@@ -10,6 +10,8 @@
 #include <wayland-client.h>
 #include <wayland-cursor.h>
 #include <xdg-shell-client-protocol.h>
+#define G_LOG_USE_STRUCTURED
+#include <glib.h>
 
 const uint8_t format_width = 4;
 const uint32_t initial_width = 200;
@@ -46,7 +48,7 @@ int buffer_resize(struct buffer *buffer, int32_t width, int32_t height) {
     wl_buffer_destroy(buffer->wlbuff);
     int trunc_result = ftruncate(buffer->memfd, new_len);
     if (trunc_result == -1) {
-      fprintf(stderr, "failed to resize fd\n");
+      g_error("Failed to resize memfd");
       return -1;
     }
     buffer->data = (uint8_t *) mremap((void *) buffer->data, buffer->pool_len, new_len, MREMAP_MAYMOVE);
@@ -86,13 +88,13 @@ static void SIGINT_handler(int sig) {
 int memfd_new(int size) {
   int fd = memfd_create("buf", 0);
   if (fd < 0) {
-    fprintf(stderr, "no shared fd for me :(\n");
+    g_error("Could not create memefd :(");
     return fd;
   }
 
   int trunc_result = ftruncate(fd, size);
   if (trunc_result == -1) {
-    fprintf(stderr, "failed to resize fd\n");
+    g_error("Failed to resize memfd");
     return -1;
   }
 
@@ -131,7 +133,7 @@ static void global_remove_handler(void *data,
                                   uint32_t name) {
   // TODO actually handle things?
   // maybe its not needed since we dont require anything fancy
-  printf("Removed global: %u\n", name);
+  g_debug("Removed global: %u", name);
 }
 
 static const struct wl_registry_listener reg_listener = {
@@ -141,7 +143,7 @@ static const struct wl_registry_listener reg_listener = {
 
 static void new_frame(struct state *state, uint32_t time) {
   struct buffer *buff = &state->buffers[state->next_buffer];
-  buffer_resize(buff, state->desired_width, state->desired_height);
+  buffer_resize(buff, state->desired_width, state->desired_height); // FIXME no error checking
 
   for (int i = 0; i < buff->height; i++) {
     for (int j = 0; j < buff->width; j++) {
@@ -166,10 +168,10 @@ static void surface_configure(void *data,
                               struct xdg_surface *xdg_surface,
                               uint32_t serial) {
   struct state *state = (struct state *) data;
-  printf("got configure event: %d\n", serial);
+  g_debug("got configure event: %d", serial);
   xdg_surface_ack_configure(xdg_surface, serial);
   new_frame(state, state->last_time);
-  printf("acked configure: %d\n", serial);
+  g_debug("acked configure: %d", serial);
 }
 
 static const struct xdg_surface_listener surface_handler = {
@@ -181,7 +183,7 @@ static void toplevel_configure(void *data, struct xdg_toplevel *xdg_toplevel,
                                int32_t height,
                                struct wl_array *states) {
   struct state *state = (struct state *) data;
-  printf("configure event to width:%d, height:%d, and whatever\n", width, height);
+  g_debug("configure event to width:%d, height:%d, and whatever", width, height);
   if (width != 0) {
     state->desired_width = width;
   }
@@ -197,13 +199,13 @@ static void toplevel_close(void *data, struct xdg_toplevel *xdg_toplevel) {
 static void toplevel_configure_bounds(void *data, struct xdg_toplevel *xdg_toplevel,
                                       int32_t width,
                                       int32_t height) {
-  printf("bounds event to width:%d, height:%d\n", width, height);
+  g_debug("bounds event to width:%d, height:%d", width, height);
 }
 
 static void toplevel_wmcaps(void *data,
                             struct xdg_toplevel *xdg_toplevel,
                             struct wl_array *capabilities) {
-  printf("got wmcaps\n");
+  g_debug("got wmcaps");
 }
 
 static const struct xdg_toplevel_listener toplevel_handler = {
@@ -255,7 +257,7 @@ int main(int argc, char *argv[]) {
 
   state.disp = wl_display_connect(NULL);
   if (state.disp == NULL) {
-    fprintf(stderr, "no disp\n");
+    g_error("no disp");
     return 1;
   }
 
@@ -276,7 +278,7 @@ int main(int argc, char *argv[]) {
 
     buff->memfd = memfd_new(init_size);
     if (buff->memfd < 0) {
-      fprintf(stderr, "memfd not created\n");
+      g_error("memfd not created");
       goto destroy;
     }
     buff->pool_len = init_size;
@@ -304,10 +306,9 @@ int main(int argc, char *argv[]) {
 
  destroy: //FIXME actually destroy everything properly
   /* if (close(memfd) < 0) { */
-  /*   fprintf(stderr, "Failure closing memfd\n"); */
+  /*   g_error("Failure closing memfd"); */
   /* } */
   wl_registry_destroy(state.reg);
   wl_display_disconnect(state.disp);
-  printf("\n");
   return 0;
 }
